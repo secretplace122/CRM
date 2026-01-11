@@ -1,0 +1,325 @@
+﻿@page
+@model DG_CRM.Pages.EditModel
+@{
+    ViewData["Title"] = "Редактировать запись";
+}
+
+@section Scripts {
+    <script src="~/js/appointment.js"></script>
+}
+
+<div class="container mt-4">
+    <h1><i class="bi bi-pencil"></i> Редактировать запись</h1>
+
+    <div class="row mt-4">
+        <div class="col-md-8">
+            <form method="post" id="editForm">
+                <input type="hidden" asp-for="Appointment.Id" />
+
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">ФИО клиента *</label>
+                                    <input type="text" class="form-control" asp-for="Appointment.FullName" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Телефон *</label>
+                                    <input type="tel" class="form-control" asp-for="Appointment.Phone" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" asp-for="Appointment.Email">
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Услуга *</label>
+                            <select class="form-select" id="serviceSelect" asp-for="Appointment.ServiceName" required>
+                                <option value="">Выберите услугу</option>
+                                @if (ViewData["Services"] is List<DG_CRM.Data.Models.Service> services)
+                                {
+                                    @foreach (var service in services)
+                                    {
+                                        <option value="@service.Name"
+                                                data-price="@service.Price.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)"
+                                                data-duration="@service.DurationMinutes">
+                                            @service.Name (@service.Price.ToString("C"), @service.DurationMinutes мин.)
+                                        </option>
+                                    }
+                                }
+                                else
+                                {
+                                    <!-- Запасные варианты -->
+                                    <option value="Стрижка" data-price="1500" data-duration="60">Стрижка</option>
+                                    <option value="Окрашивание" data-price="3000" data-duration="120">Окрашивание</option>
+                                    <option value="Маникюр" data-price="2000" data-duration="90">Маникюр</option>
+                                }
+                            </select>
+                            @if (!(ViewData["Services"] is List<DG_CRM.Data.Models.Service> servicesList && servicesList.Any()))
+                            {
+                                <div class="form-text text-warning">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                    Нет услуг в базе. <a asp-page="/Settings">Добавьте услуги в настройках</a>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Автоматическое заполнение цены и длительности -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Стоимость (₽)</label>
+                                    <input type="number" class="form-control" asp-for="Appointment.Price"
+                                           id="priceInput" readonly step="0.01">
+                                    <div class="form-text">Автоматически из услуги</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Длительность (мин)</label>
+                                    <input type="number" class="form-control" asp-for="Appointment.DurationMinutes"
+                                           id="durationInput" readonly>
+                                    <div class="form-text">Автоматически из услуги</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Дата и время с учетом кратности -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Дата *</label>
+                                @{
+                                    var currentDate = Model.Appointment?.StartTime.ToString("yyyy-MM-dd") ?? DateTime.Today.ToString("yyyy-MM-dd");
+                                }
+                                <input type="date" class="form-control" id="dateInput"
+                                       value="@currentDate" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Время *</label>
+                                <select class="form-select" id="timeSelect" required>
+                                    <option value="">Загрузка времени...</option>
+                                </select>
+                                <div class="form-text" id="timeInfo">Кратность: <span id="intervalValue">20</span> мин</div>
+                            </div>
+                            <!-- Скрытое поле для объединенной даты-времени -->
+                            <input type="hidden" asp-for="Appointment.StartTime" id="startTimeInput" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Статус</label>
+                            <select class="form-select" asp-for="Appointment.Status">
+                                @foreach (var status in Enum.GetValues<DG_CRM.Data.Models.AppointmentStatus>())
+                                {
+                                    <option value="@status">@GetStatusDisplayName(status)</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Заметки</label>
+                            <textarea class="form-control" rows="3" asp-for="Appointment.Notes"></textarea>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i> Сохранить изменения
+                        </button>
+                        <a asp-page="./Index" class="btn btn-secondary">Отмена</a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Установка выбранной услуги при загрузке страницы
+    function setCurrentService() {
+        const serviceSelect = document.getElementById('serviceSelect');
+        const currentService = '@Html.Raw(Model.Appointment?.ServiceName)';
+
+        if (serviceSelect && currentService) {
+            // Ищем и выбираем текущую услугу
+            for (let i = 0; i < serviceSelect.options.length; i++) {
+                if (serviceSelect.options[i].value === currentService) {
+                    serviceSelect.selectedIndex = i;
+                    if (typeof updateServiceDetails === 'function') {
+                        updateServiceDetails(serviceSelect);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    // Функция для загрузки и установки времени при редактировании
+    async function loadAndSetTimeForEdit() {
+        try {
+            // Сначала ждем загрузки временных слотов
+            if (typeof loadTimeSlots === 'function') {
+                await loadTimeSlots();
+            }
+
+            // Ждем 300мс для гарантии загрузки слотов
+            setTimeout(function () {
+                const currentAppointmentTime = '@(Model.Appointment?.StartTime.ToString("HH:mm") ?? "")';
+                const currentDate = '@(Model.Appointment?.StartTime.ToString("yyyy-MM-dd") ?? DateTime.Today.ToString("yyyy-MM-dd"))';
+
+                console.log('Setting time for edit:', currentAppointmentTime);
+                console.log('Setting date for edit:', currentDate);
+
+                // Устанавливаем дату
+                const dateInput = document.getElementById('dateInput');
+                if (dateInput && currentDate) {
+                    dateInput.value = currentDate;
+                }
+
+                // Устанавливаем время
+                if (currentAppointmentTime) {
+                    const timeSelect = document.getElementById('timeSelect');
+                    if (timeSelect) {
+                        // Ищем точное совпадение
+                        let found = false;
+                        for (let i = 0; i < timeSelect.options.length; i++) {
+                            if (timeSelect.options[i].value === currentAppointmentTime) {
+                                timeSelect.selectedIndex = i;
+                                found = true;
+                                console.log('Found exact time match:', currentAppointmentTime);
+                                break;
+                            }
+                        }
+
+                        // Если не нашли точное совпадение, ищем ближайшее
+                        if (!found && timeSelect.options.length > 1) {
+                            const [targetHour, targetMinute] = currentAppointmentTime.split(':').map(Number);
+
+                            let closestIndex = 1; // Первый доступный слот
+                            let smallestDiff = Infinity;
+
+                            for (let i = 1; i < timeSelect.options.length; i++) {
+                                const [slotHour, slotMinute] = timeSelect.options[i].value.split(':').map(Number);
+                                const diff = Math.abs((slotHour * 60 + slotMinute) - (targetHour * 60 + targetMinute));
+
+                                if (diff < smallestDiff) {
+                                    smallestDiff = diff;
+                                    closestIndex = i;
+                                }
+                            }
+
+                            timeSelect.selectedIndex = closestIndex;
+                            console.log('Found closest time:', timeSelect.options[closestIndex].value);
+                        }
+
+                        // Обновляем скрытое поле даты-времени
+                        if (typeof updateDateTime === 'function') {
+                            updateDateTime();
+                        }
+                    }
+                }
+            }, 300);
+        } catch (error) {
+            console.error('Error setting time for edit:', error);
+        }
+    }
+
+    // Валидация формы перед отправкой
+    function validateEditForm(e) {
+        const serviceSelect = document.getElementById('serviceSelect');
+        const dateInput = document.getElementById('dateInput');
+        const timeSelect = document.getElementById('timeSelect');
+
+        // Проверка услуги
+        if (!serviceSelect || !serviceSelect.value) {
+            e.preventDefault();
+            alert('Выберите услугу!');
+            if (serviceSelect) serviceSelect.focus();
+            return false;
+        }
+
+        // Проверка даты и времени
+        if (!dateInput || !timeSelect || !dateInput.value || !timeSelect.value) {
+            e.preventDefault();
+            alert('Укажите дату и время!');
+            return false;
+        }
+
+        // Дополнительная проверка времени
+        if (typeof validateDateTime === 'function') {
+            const validation = validateDateTime();
+            if (!validation.isValid) {
+                e.preventDefault();
+                alert(validation.message);
+                return false;
+            }
+        }
+
+        console.log('Edit form validation passed');
+        return true;
+    }
+
+    // Инициализация
+    document.addEventListener('DOMContentLoaded', function () {
+        // Устанавливаем текущую услугу
+        setCurrentService();
+
+        // Загружаем и устанавливаем время
+        loadAndSetTimeForEdit();
+
+        // Инициализируем форму
+        if (typeof initializeAppointmentForm === 'function') {
+            initializeAppointmentForm();
+        }
+
+        // Устанавливаем обработчик изменения услуги
+        const serviceSelect = document.getElementById('serviceSelect');
+        if (serviceSelect) {
+            serviceSelect.addEventListener('change', function () {
+                if (typeof updateServiceDetails === 'function') {
+                    updateServiceDetails(this);
+                }
+            });
+        }
+
+        // Валидация формы при отправке
+        const form = document.getElementById('editForm');
+        if (form) {
+            form.addEventListener('submit', validateEditForm);
+        }
+
+        // Отладка
+        console.log('Edit form initialized');
+    @if (Model.Appointment?.Id != null)
+    {
+        <text>
+                console.log('Current appointment:', {
+                    id: @Model.Appointment.Id,
+                    service: '@Model.Appointment.ServiceName',
+                    price: @Model.Appointment.Price,
+                    duration: @Model.Appointment.DurationMinutes,
+                    time: '@Model.Appointment.StartTime.ToString("HH:mm")'
+                });
+        </text>
+    }
+        });
+</script>
+
+@functions {
+    string GetStatusDisplayName(DG_CRM.Data.Models.AppointmentStatus status)
+    {
+        return status switch
+        {
+            DG_CRM.Data.Models.AppointmentStatus.Scheduled => "Запланировано",
+            DG_CRM.Data.Models.AppointmentStatus.Confirmed => "Подтверждено",
+            DG_CRM.Data.Models.AppointmentStatus.InProgress => "В работе",
+            DG_CRM.Data.Models.AppointmentStatus.Completed => "Завершено",
+            DG_CRM.Data.Models.AppointmentStatus.Cancelled => "Отменено",
+            _ => status.ToString()
+        };
+    }
+}

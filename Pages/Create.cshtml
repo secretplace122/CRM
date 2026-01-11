@@ -1,0 +1,225 @@
+﻿@page
+@model DG_CRM.Pages.CreateModel
+@{
+    ViewData["Title"] = "Новая запись";
+}
+
+@section Scripts {
+    <script src="~/js/appointment.js"></script>
+}
+
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0"><i class="bi bi-plus-circle"></i> Новая запись клиента</h4>
+                </div>
+
+                <div class="card-body">
+                    @if (!ViewData.ModelState.IsValid)
+                    {
+                        <div class="alert alert-danger">
+                            <h5>Ошибки заполнения:</h5>
+                            <ul>
+                                @foreach (var error in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+                                {
+                                    <li>@error.ErrorMessage</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+
+                    <form method="post" id="createForm">
+                        <!-- Основные данные -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">ФИО клиента *</label>
+                                <input type="text" class="form-control" asp-for="Appointment.FullName" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Телефон *</label>
+                                <input type="tel" class="form-control" asp-for="Appointment.Phone" required>
+                            </div>
+                        </div>
+
+                        <!-- Email и услуга -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Email (необязательно)</label>
+                                <input type="email" class="form-control" asp-for="Appointment.Email">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Услуга *</label>
+                                <select class="form-select" id="serviceSelect" asp-for="Appointment.ServiceName" required>
+                                    <option value="">Выберите услугу</option>
+                                    @if (ViewData["Services"] is List<DG_CRM.Data.Models.Service> services && services.Any())
+                                    {
+                                        @foreach (var service in services)
+                                        {
+                                            <option value="@service.Name"
+                                                    data-price="@service.Price.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)"
+                                                    data-duration="@service.DurationMinutes">
+                                                @service.Name (@service.Price.ToString("C"), @service.DurationMinutes мин.)
+                                            </option>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <option value="Тестовая услуга" data-price="1000" data-duration="60">
+                                            Тестовая услуга (1,000.00 ₽, 60 мин.)
+                                        </option>
+                                    }
+                                </select>
+                                @if (!(ViewData["Services"] is List<DG_CRM.Data.Models.Service> servicesList && servicesList.Any()))
+                                {
+                                    <div class="form-text text-warning">
+                                        <i class="bi bi-exclamation-triangle"></i>
+                                        Нет услуг в базе. <a asp-page="/Settings">Добавьте услуги в настройках</a>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Автоматическое заполнение цены и длительности -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Стоимость (₽)</label>
+                                    <input type="number" class="form-control" asp-for="Appointment.Price"
+                                           id="priceInput" readonly step="0.01">
+                                    <div class="form-text">Автоматически из услуги</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Длительность (мин)</label>
+                                    <input type="number" class="form-control" asp-for="Appointment.DurationMinutes"
+                                           id="durationInput" readonly>
+                                    <div class="form-text">Автоматически из услуги</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Дата и время с учетом кратности -->
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Дата *</label>
+                                @{
+                                    var defaultDate = DateTime.Today.ToString("yyyy-MM-dd");
+                                }
+                                <input type="date" class="form-control" id="dateInput"
+                                       value="@defaultDate" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Время *</label>
+                                <select class="form-select" id="timeSelect" required>
+                                    <option value="">Загрузка времени...</option>
+                                </select>
+                                <div class="form-text" id="timeInfo">Кратность: <span id="intervalValue">20</span> мин</div>
+                            </div>
+                            <!-- Скрытое поле для объединенной даты-времени -->
+                            <input type="hidden" asp-for="Appointment.StartTime" id="startTimeInput" />
+                        </div>
+
+                        <!-- Статус -->
+                        <div class="mb-3">
+                            <label class="form-label">Статус</label>
+                            <select class="form-select" asp-for="Appointment.Status">
+                                @foreach (var status in Enum.GetValues<DG_CRM.Data.Models.AppointmentStatus>())
+                                {
+                                    <option value="@status">@GetStatusDisplayName(status)</option>
+                                }
+                            </select>
+                        </div>
+
+                        <!-- Заметки -->
+                        <div class="mb-3">
+                            <label class="form-label">Заметки</label>
+                            <textarea class="form-control" rows="3" asp-for="Appointment.Notes"></textarea>
+                        </div>
+
+                        <!-- Кнопки -->
+                        <div class="d-flex justify-content-between mt-4">
+                            <a asp-page="./Index" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Назад к списку
+                            </a>
+                            <button type="submit" class="btn btn-success">
+                                <i class="bi bi-check-circle"></i> Создать запись
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Валидация формы перед отправкой
+    function validateForm(e) {
+        const serviceSelect = document.getElementById('serviceSelect');
+        const dateInput = document.getElementById('dateInput');
+        const timeSelect = document.getElementById('timeSelect');
+
+        // Проверка услуги
+        if (!serviceSelect.value) {
+            e.preventDefault();
+            alert('Выберите услугу!');
+            serviceSelect.focus();
+            return false;
+        }
+
+        // Проверка даты и времени
+        if (!dateInput.value || !timeSelect.value) {
+            e.preventDefault();
+            alert('Укажите дату и время!');
+            return false;
+        }
+
+        console.log('Form validation passed');
+        return true;
+    }
+
+    // Инициализация
+    document.addEventListener('DOMContentLoaded', function () {
+        // Инициализируем форму
+        if (typeof initializeAppointmentForm === 'function') {
+            initializeAppointmentForm();
+        }
+
+        // Устанавливаем обработчик изменения услуги
+        const serviceSelect = document.getElementById('serviceSelect');
+        if (serviceSelect) {
+            serviceSelect.addEventListener('change', function () {
+                if (typeof updateServiceDetails === 'function') {
+                    updateServiceDetails(this);
+                }
+            });
+        }
+
+        // Валидация формы при отправке
+        const form = document.getElementById('createForm');
+        if (form) {
+            form.addEventListener('submit', validateForm);
+        }
+
+        // Отладка
+        console.log('Create form initialized');
+    });
+</script>
+
+@functions {
+    string GetStatusDisplayName(DG_CRM.Data.Models.AppointmentStatus status)
+    {
+        return status switch
+        {
+            DG_CRM.Data.Models.AppointmentStatus.Scheduled => "Запланировано",
+            DG_CRM.Data.Models.AppointmentStatus.Confirmed => "Подтверждено",
+            DG_CRM.Data.Models.AppointmentStatus.InProgress => "В работе",
+            DG_CRM.Data.Models.AppointmentStatus.Completed => "Завершено",
+            DG_CRM.Data.Models.AppointmentStatus.Cancelled => "Отменено",
+            _ => status.ToString()
+        };
+    }
+}
